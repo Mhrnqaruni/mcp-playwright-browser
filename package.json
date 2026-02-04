@@ -1,14 +1,28 @@
 {
-  "name": "auto",
+  "name": "mcp-playwright-browser",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "MCP server for browser automation with Playwright. Scrape web pages, extract job listings from Indeed, and search Google - all through AI-powered tools.",
+  "main": "src/mcp-browser-server.js",
   "scripts": {
     "start": "node src/mcp-browser-server.js",
     "test:indeed": "node src/tests/indeed-test.js",
     "test:google": "node src/tests/google-test.js"
   },
-  "keywords": [],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "playwright",
+    "browser-automation",
+    "web-scraping",
+    "indeed",
+    "google",
+    "job-scraper",
+    "ai-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mhrnqaruni/mcp-playwright-browser.git"
+  },
   "author": "",
   "license": "ISC",
   "type": "module",
