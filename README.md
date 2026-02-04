@@ -15,6 +15,19 @@ A powerful Model Context Protocol (MCP) server that exposes Playwright-powered b
 - **Dual Navigation**: Traditional DOM-based OR visual screenshot-based interaction
 - **File Management**: Save extracted data to structured text files
 
+## How This Differs from Microsoft's Official playwright-mcp
+
+Microsoft's [playwright-mcp](https://github.com/microsoft/playwright-mcp) focuses on **accessibility-tree based automation** for test development and structured page interaction.
+
+This server adds:
+- **Visual/screenshot-based navigation** - For sites where accessibility trees are insufficient (Shadow DOM, obfuscated forms, visual layouts)
+- **Production-ready extractors** - Pre-built Indeed and Google scrapers with anti-detection
+- **Stealth capabilities** - User profile persistence, anti-bot headers, CDP connection to real Chrome instances
+- **Hybrid approach** - Combines DOM and visual methods, letting AI choose based on task requirements
+
+**Use Microsoft's tool for:** Test automation, structured accessibility-driven workflows
+**Use this tool for:** Web scraping, complex agent-driven automation, anti-detection scenarios
+
 ## Visual Navigation: A Unique Advantage
 
 This server provides **two ways** for AI assistants to interact with web pages:
@@ -28,7 +41,44 @@ The visual navigation feature (`browser.visual_snapshot` + `browser.click_at`) a
 - Shadow DOM or heavily nested iframe structures
 - When you need the AI to understand the visual layout, not just the code
 
-The AI can switch between methods based on the task - defaulting to fast DOM methods, but using visual analysis when you explicitly request it or when DOM methods fail.
+### Performance & Cost Considerations
+
+**When to use DOM methods (default):**
+- ~10x faster execution
+- Minimal token usage (structured text vs. image encoding)
+- Lower latency for multi-step workflows
+- Works reliably on well-structured sites
+
+**When to use Visual methods:**
+- Complex Shadow DOM or iframes where DOM traversal fails
+- Sites with obfuscated or dynamically-generated element IDs
+- Anti-bot measures that detect programmatic element selection
+- When human-like interaction patterns are required
+
+The AI automatically defaults to DOM-based methods for efficiency, switching to visual only when explicitly requested or when DOM methods fail. This optimizes for speed and cost while maintaining robustness.
+
+## ⚠️ Ethical Use & Legal Compliance
+
+This tool is provided for:
+- Educational purposes and learning browser automation
+- Testing your own web applications
+- Legitimate research with appropriate authorization
+- Automation of tasks you have permission to perform
+
+**You are responsible for:**
+- Respecting `robots.txt` and website Terms of Service
+- Obtaining permission before scraping third-party sites
+- Complying with data protection regulations (GDPR, CCPA, etc.)
+- Rate-limiting requests to avoid service disruption
+- Using the tool in accordance with applicable laws
+
+**Not intended for:**
+- Violating website terms of service
+- Bypassing paywalls or access controls without authorization
+- Automated data collection without permission
+- Any illegal activity
+
+The authors assume no liability for misuse of this software. Users are solely responsible for ensuring their use complies with all applicable laws and regulations.
 
 ## Installation
 
@@ -109,13 +159,19 @@ gemini mcp add playwrightBrowser node src/mcp-browser-server.js
 - `browser.visual_snapshot` - Take screenshot + generate element map with bounding boxes and IDs
 - `browser.click_at` - Click at specific X/Y coordinates for visual workflows
 
-### Job Scraping
-- `jobs.extract_indeed` - Extract Indeed job listings
-- `jobs.indeed_next_page` - Navigate to next Indeed results page
+### Specialized Extractors (Production Examples)
 
-### Search
-- `search.google` - Search Google and extract results
-- `search.extract_google` - Extract results from current Google page
+Pre-built extractors for common automation targets - demonstrating robust, production-grade scraping patterns:
+
+**Job Scraping:**
+- `jobs.extract_indeed` - Extract Indeed job listings with multi-selector fallbacks, duplicate detection, and anti-bot awareness
+- `jobs.indeed_next_page` - Navigate to next Indeed results page with multiple pagination strategies
+
+**Search:**
+- `search.google` - Search Google and extract results with consent handling and result deobfuscation
+- `search.extract_google` - Extract results from current Google page with multiple container format support
+
+These extractors showcase best practices for building reliable scrapers: fallback selector chains, access issue detection, URL normalization, and filesystem-safe sanitization. Use them as templates for building your own specialized extractors.
 
 ### File Operations
 - `files.write_text` - Save arbitrary text to files
