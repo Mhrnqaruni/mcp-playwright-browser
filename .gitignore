@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Output files
+output/
+*.txt
+*.html
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Gemini CLI settings (contains local paths)
+.gemini/
+
+# Playwright
+playwright-report/
+test-results/
+
+# Debug files
+*-debug.*
