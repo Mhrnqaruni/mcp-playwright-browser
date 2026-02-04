@@ -1,17 +1,34 @@
 # MCP Playwright Browser Server
 
-A powerful Model Context Protocol (MCP) server that exposes Playwright-powered browser automation tools to AI assistants. Enable your AI to navigate web pages, extract structured data, scrape job listings, and interact with web content programmatically.
+A powerful Model Context Protocol (MCP) server that exposes Playwright-powered browser automation tools to AI assistants. Enable your AI to navigate web pages, extract structured data, scrape job listings, and interact with web content programmatically - using both traditional DOM methods and visual screenshot-based navigation.
 
 ## Features
 
+- **Visual Navigation**: Screenshot-based page analysis with element mapping and coordinate-based clicking
 - **Browser Automation**: Full browser control via Playwright (Chromium)
-- **MCP Integration**: Expose 20+ tools via Model Context Protocol
+- **MCP Integration**: Expose 23+ tools via Model Context Protocol
 - **Anti-Detection**: Stealth mode to bypass bot detection
 - **Job Scraping**: Specialized extractors for Indeed job postings
 - **Search Extraction**: Google search results extraction
 - **CDP Support**: Connect to existing Chrome instances via Chrome DevTools Protocol
 - **Flexible Modes**: Headless or headful browser operation
+- **Dual Navigation**: Traditional DOM-based OR visual screenshot-based interaction
 - **File Management**: Save extracted data to structured text files
+
+## Visual Navigation: A Unique Advantage
+
+This server provides **two ways** for AI assistants to interact with web pages:
+
+1. **Traditional DOM-based** (default, faster): AI reads the HTML code structure
+2. **Visual screenshot-based** (optional, more human-like): AI analyzes a screenshot of the page
+
+The visual navigation feature (`browser.visual_snapshot` + `browser.click_at`) allows AI to "see" pages like a human, which is invaluable for:
+- Complex layouts where HTML structure doesn't match visual appearance
+- Obfuscated forms with dynamically generated or meaningless element IDs
+- Shadow DOM or heavily nested iframe structures
+- When you need the AI to understand the visual layout, not just the code
+
+The AI can switch between methods based on the task - defaulting to fast DOM methods, but using visual analysis when you explicitly request it or when DOM methods fail.
 
 ## Installation
 
@@ -88,6 +105,10 @@ gemini mcp add playwrightBrowser node src/mcp-browser-server.js
 - `browser.extract_html` - Extract HTML from selectors
 - `browser.screenshot` - Capture screenshots
 
+### Visual Navigation
+- `browser.visual_snapshot` - Take screenshot + generate element map with bounding boxes and IDs
+- `browser.click_at` - Click at specific X/Y coordinates for visual workflows
+
 ### Job Scraping
 - `jobs.extract_indeed` - Extract Indeed job listings
 - `jobs.indeed_next_page` - Navigate to next Indeed results page
@@ -134,7 +155,35 @@ search.google({
 })
 ```
 
-### Example 3: Stealth Mode with User Profile
+### Example 3: Visual Navigation (Screenshot-Based)
+
+```javascript
+// Launch browser
+browser.launch({ headless: false })
+
+// Navigate to a page
+browser.goto({ url: "https://example.com" })
+
+// Take visual snapshot - AI can "see" the page layout
+browser.visual_snapshot({
+  path: "output/screenshot.png",
+  saveMapPath: "output/element-map.json"
+})
+
+// Click element by ID from the visual map
+browser.click({ elementId: 42 })
+
+// Or click at specific coordinates
+browser.click_at({ x: 350, y: 450 })
+```
+
+**When to use visual navigation:**
+- Complex layouts where DOM structure is hard to parse
+- Obfuscated forms or dynamically generated IDs
+- When you need the AI to "see" the page like a human
+- Shadow DOM or iframe-heavy pages
+
+### Example 4: Stealth Mode with User Profile
 
 ```javascript
 // Launch with persistent profile to bypass captchas
@@ -146,7 +195,7 @@ browser.launch({
 })
 ```
 
-### Example 4: Connect to Existing Chrome
+### Example 5: Connect to Existing Chrome
 
 Start Chrome with remote debugging:
 ```bash

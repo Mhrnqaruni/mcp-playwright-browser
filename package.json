@@ -1,7 +1,7 @@
 {
   "name": "mcp-playwright-browser",
-  "version": "1.0.0",
-  "description": "MCP server for browser automation with Playwright. Scrape web pages, extract job listings from Indeed, and search Google - all through AI-powered tools.",
+  "version": "1.1.0",
+  "description": "MCP server for browser automation with Playwright featuring visual navigation. AI can interact with pages using DOM or screenshot-based methods. Includes specialized extractors for Indeed jobs and Google search.",
   "main": "src/mcp-browser-server.js",
   "scripts": {
     "start": "node src/mcp-browser-server.js",
