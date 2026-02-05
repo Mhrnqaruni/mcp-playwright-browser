@@ -2,12 +2,29 @@
 
 A powerful Model Context Protocol (MCP) server that exposes Playwright-powered browser automation tools to AI assistants. Enable your AI to navigate web pages, extract structured data, scrape job listings, and interact with web content programmatically - using both traditional DOM methods and visual screenshot-based navigation.
 
+## 🚀 Quick Start with Profile Launchers
+
+**The easiest way to get started** is using the pre-configured profile launchers:
+
+```bash
+# Interactive mode (recommended for beginners)
+scripts\run-chrome-profile.bat --kill-chrome
+
+# One-shot automation
+scripts\run-dom-headless.bat -p "Go to https://example.com and extract text"
+```
+
+See [Profile Launchers](#profile-launchers) section for detailed usage.
+
+---
+
 ## Features
 
+- **Profile Launchers**: One-click scripts that configure everything automatically
 - **Visual Navigation**: Screenshot-based page analysis with element mapping and coordinate-based clicking
-- **Browser Automation**: Full browser control via Playwright (Chromium)
-- **MCP Integration**: Expose 23+ tools via Model Context Protocol
-- **Anti-Detection**: Stealth mode to bypass bot detection
+- **Browser Automation**: Full browser control via Playwright (Chromium/Chrome)
+- **MCP Integration**: 25+ tools via Model Context Protocol
+- **Anti-Detection**: Stealth mode with real Chrome profile support
 - **Job Scraping**: Specialized extractors for Indeed job postings
 - **Search Extraction**: Google search results extraction
 - **CDP Support**: Connect to existing Chrome instances via Chrome DevTools Protocol
@@ -15,309 +32,508 @@ A powerful Model Context Protocol (MCP) server that exposes Playwright-powered b
 - **Dual Navigation**: Traditional DOM-based OR visual screenshot-based interaction
 - **File Management**: Save extracted data to structured text files
 
-## How This Differs from Microsoft's Official playwright-mcp
+---
 
-Microsoft's [playwright-mcp](https://github.com/microsoft/playwright-mcp) focuses on **accessibility-tree based automation** for test development and structured page interaction.
+## 🎯 Profile Launchers
 
-This server adds:
-- **Visual/screenshot-based navigation** - For sites where accessibility trees are insufficient (Shadow DOM, obfuscated forms, visual layouts)
-- **Production-ready extractors** - Pre-built Indeed and Google scrapers with anti-detection
-- **Stealth capabilities** - User profile persistence, anti-bot headers, CDP connection to real Chrome instances
-- **Hybrid approach** - Combines DOM and visual methods, letting AI choose based on task requirements
+### Available Profiles
 
-**Use Microsoft's tool for:** Test automation, structured accessibility-driven workflows
-**Use this tool for:** Web scraping, complex agent-driven automation, anti-detection scenarios
+| Profile | Use Case | Browser | Speed | Best For |
+|---------|----------|---------|-------|----------|
+| **run-chrome-profile.bat** | Real Chrome with your profile | Chrome (Profile 3) | Medium | Form filling, logged-in sessions |
+| **run-dom-headless.bat** | Fast automation | Chromium (headless) | ⚡ Fastest | Job scraping, bulk extraction |
+| **run-visual-headful.bat** | Visual debugging | Chromium (visible) | Medium | Debugging, verification |
+| **run-cdp-profile.bat** | Advanced - Real Chrome via CDP | Chrome (CDP) | Medium | Maximum stealth |
 
-## Visual Navigation: A Unique Advantage
+### How to Use Profiles
 
-This server provides **two ways** for AI assistants to interact with web pages:
+#### **Interactive Mode** (Chat with Gemini)
 
-1. **Traditional DOM-based** (default, faster): AI reads the HTML code structure
-2. **Visual screenshot-based** (optional, more human-like): AI analyzes a screenshot of the page
-
-The visual navigation feature (`browser.visual_snapshot` + `browser.click_at`) allows AI to "see" pages like a human, which is invaluable for:
-- Complex layouts where HTML structure doesn't match visual appearance
-- Obfuscated forms with dynamically generated or meaningless element IDs
-- Shadow DOM or heavily nested iframe structures
-- When you need the AI to understand the visual layout, not just the code
-
-### Performance & Cost Considerations
-
-**When to use DOM methods (default):**
-- ~10x faster execution
-- Minimal token usage (structured text vs. image encoding)
-- Lower latency for multi-step workflows
-- Works reliably on well-structured sites
-
-**When to use Visual methods:**
-- Complex Shadow DOM or iframes where DOM traversal fails
-- Sites with obfuscated or dynamically-generated element IDs
-- Anti-bot measures that detect programmatic element selection
-- When human-like interaction patterns are required
-
-The AI automatically defaults to DOM-based methods for efficiency, switching to visual only when explicitly requested or when DOM methods fail. This optimizes for speed and cost while maintaining robustness.
-
-## ⚠️ Ethical Use & Legal Compliance
-
-This tool is provided for:
-- Educational purposes and learning browser automation
-- Testing your own web applications
-- Legitimate research with appropriate authorization
-- Automation of tasks you have permission to perform
-
-**You are responsible for:**
-- Respecting `robots.txt` and website Terms of Service
-- Obtaining permission before scraping third-party sites
-- Complying with data protection regulations (GDPR, CCPA, etc.)
-- Rate-limiting requests to avoid service disruption
-- Using the tool in accordance with applicable laws
-
-**Not intended for:**
-- Violating website terms of service
-- Bypassing paywalls or access controls without authorization
-- Automated data collection without permission
-- Any illegal activity
-
-The authors assume no liability for misuse of this software. Users are solely responsible for ensuring their use complies with all applicable laws and regulations.
-
-## Installation
+Run the launcher and interact naturally:
 
 ```bash
-npm install
+# Use your real Chrome profile (logged into Gmail, etc.)
+scripts\run-chrome-profile.bat --kill-chrome
+
+# Fast headless automation
+scripts\run-dom-headless.bat
+
+# Visual mode with browser visible
+scripts\run-visual-headful.bat
 ```
 
-Install Playwright Chromium browser:
+Then in Gemini, just type your task:
+```
+Go to gmail.com and wait for me
+Fill out the job application at [URL] with my CV
+Extract all job listings from Indeed and save them
+```
+
+#### **One-Shot Mode** (Automated Scripts)
+
+Run a task and get a log file:
 
 ```bash
-npx playwright install chromium
+# Basic one-shot
+scripts\run-dom-headless.bat -p "Go to https://example.com and take a snapshot"
+
+# With custom output file
+scripts\run-chrome-profile.bat --kill-chrome -p "Fill form at [URL]" --output logs\form-fill.log
+
+# Complex automation
+scripts\run-dom-headless.bat -p "Extract 50 jobs from Indeed and save to output/jobs"
 ```
 
-## Quick Start
+**Logs are automatically saved** to `logs/` with timestamps.
 
-### Running the MCP Server
+---
+
+## 🔧 Installation
+
+### Prerequisites
+- Node.js 18+
+- npm
+- Gemini CLI (install via: `npm install -g @google/gemini-cli`)
+
+### Setup Steps
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/Mhrnqaruni/mcp-playwright-browser.git
+   cd mcp-playwright-browser
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   npx playwright install chromium
+   ```
+
+3. **Configure Gemini CLI**
+
+   The project includes `.gemini/settings.json` that configures the MCP server automatically.
+
+   **Important:** Update the `cwd` path in `.gemini/settings.json` to your repository location:
+   ```json
+   {
+     "mcpServers": {
+       "playwrightBrowser": {
+         "command": "node",
+         "args": ["src/mcp-browser-server.js"],
+         "cwd": "C:/Users/YourUsername/path/to/mcp-playwright-browser"
+       }
+     }
+   }
+   ```
+
+4. **Disable Chrome Background Apps** (Optional but recommended)
+
+   To avoid Chrome locking your profile:
+   ```
+   Chrome Settings → Advanced → System →
+   ☐ Continue running background apps when Google Chrome is closed
+   ```
+
+5. **Test the installation**
+   ```bash
+   scripts\run-dom-headless.bat -p "Launch browser, go to https://example.com, take a snapshot, close"
+   ```
+
+---
+
+## 📖 Usage Guide
+
+### Profile Comparison
+
+#### 1. **Chrome Profile** (Recommended for most users)
+```bash
+scripts\run-chrome-profile.bat --kill-chrome
+```
+
+**Features:**
+- ✅ Uses your real Chrome with Profile 3 (mehran.gharuni@gmail.com)
+- ✅ Already logged into Gmail, LinkedIn, job sites
+- ✅ Persistent sessions (no re-login needed)
+- ✅ Full Chrome extensions support
+- ⚠️ Requires Chrome to be closed (use `--kill-chrome`)
+
+**Best for:**
+- Filling out job applications
+- Accessing authenticated sites
+- Tasks requiring logged-in sessions
+- Form submissions
+
+**Example tasks:**
+```
+Fill out the application form at [URL] with my information
+Go to my Gmail inbox and summarize unread emails
+Submit this job application on LinkedIn
+```
+
+#### 2. **DOM Headless** (Fastest automation)
+```bash
+scripts\run-dom-headless.bat -p "your task here"
+```
+
+**Features:**
+- ⚡ Fastest execution (no GUI overhead)
+- ✅ Best for bulk operations
+- ✅ Low resource usage
+- ❌ No visual feedback
+
+**Best for:**
+- Job scraping (Indeed, LinkedIn)
+- Bulk data extraction
+- Automated testing
+- Background tasks
+
+**Example tasks:**
+```bash
+scripts\run-dom-headless.bat -p "Extract 100 jobs from Indeed and save to output/jobs"
+scripts\run-dom-headless.bat -p "Scrape product prices from [URL] and save to prices.txt"
+```
+
+#### 3. **Visual Headful** (For debugging)
+```bash
+scripts\run-visual-headful.bat
+```
+
+**Features:**
+- 👁️ Browser visible (watch what's happening)
+- 📸 Screenshot-based navigation
+- ✅ Good for troubleshooting
+- ⚠️ Slower than DOM mode
+
+**Best for:**
+- Debugging automation issues
+- Verifying form fills
+- Complex visual layouts
+- Learning how it works
+
+**Example tasks:**
+```
+Take a visual snapshot of [URL] and identify all buttons
+Navigate [complex site] and show me what you see
+```
+
+#### 4. **CDP Profile** (Advanced)
+```bash
+scripts\run-cdp-profile.bat
+```
+
+**Features:**
+- 🔐 Maximum stealth (connects to real Chrome)
+- ✅ Bypasses most bot detection
+- ✅ Uses Chrome DevTools Protocol
+- ⚠️ More complex setup
+
+**Best for:**
+- Sites with aggressive bot detection
+- When other profiles get blocked
+- Advanced automation scenarios
+
+---
+
+## 🎛️ Advanced Features
+
+### Environment Variables
+
+The launchers automatically set these. You can customize them:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_HEADLESS` | varies | Run browser without GUI (true/false) |
+| `MCP_STEALTH` | true | Enable anti-detection (true/false) |
+| `MCP_USER_DATA_DIR` | auto | Chrome profile directory |
+| `MCP_PROFILE` | Profile 3 | Chrome profile name |
+| `MCP_CHANNEL` | chrome | Use real Chrome (vs Chromium) |
+| `MCP_REQUIRE_PROFILE` | varies | Enforce profile usage (chrome-profile.bat only) |
+
+**Note:** The launchers set both `MCP_*` and `GEMINI_CLI_MCP_*` variants for compatibility with Gemini CLI's environment sanitization.
+
+### Flags
+
+#### `--kill-chrome`
+Force-closes all Chrome processes before launching.
 
 ```bash
-npm start
+scripts\run-chrome-profile.bat --kill-chrome
 ```
 
-### Running Standalone Tests
+**When to use:**
+- Chrome background processes are blocking profile access
+- You get "Chrome is already running" errors
+- After closing Chrome windows but profile still locked
 
-Test Indeed job extraction:
+#### `-p` or `--prompt`
+Run a single task and exit (one-shot mode).
+
 ```bash
-npm run test:indeed
+scripts\run-dom-headless.bat -p "Your task here"
 ```
 
-Test Google search extraction:
+#### `--output`
+Specify custom log file location.
+
 ```bash
-npm run test:google
+scripts\run-chrome-profile.bat -p "Task" --output logs\custom.log
 ```
 
-## MCP Configuration
+---
 
-Configure your MCP client to use this server. For Gemini CLI, add to your `settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "playwrightBrowser": {
-      "command": "node",
-      "args": ["src/mcp-browser-server.js"],
-      "cwd": "/path/to/this/repo"
-    }
-  }
-}
-```
-
-Or use the CLI:
-```bash
-gemini mcp add playwrightBrowser node src/mcp-browser-server.js
-```
-
-## Available Tools
+## 🛠️ Available MCP Tools
 
 ### Browser Control
-- `browser.launch` - Launch Chromium with optional stealth mode
+- `browser.launch` - Launch browser with options (headless, stealth, profile, etc.)
+- `browser.launch_chrome_cdp` - Launch Chrome with CDP for advanced control
 - `browser.connect_cdp` - Connect to existing Chrome instance
 - `browser.goto` - Navigate to URL
 - `browser.back` / `browser.forward` - Navigate history
 - `browser.new_page` - Open new tab
 - `browser.close` - Close browser session
+- `browser.wait` - Wait for selector or timeout
 
 ### Element Interaction
-- `browser.list` - List interactive elements
+- `browser.list` - List visible interactive elements
 - `browser.click` - Click elements by ID, selector, or text
 - `browser.type` - Type into input fields
 - `browser.press` - Press keyboard keys
+- `browser.click_at` - Click at specific X/Y coordinates
 
 ### Data Extraction
-- `browser.snapshot` - Get page summary with text and links
-- `browser.extract_text` - Extract text from selectors
+- `browser.snapshot` - Get page summary (title, text, links)
+- `browser.extract_text` - Extract text from CSS selectors
 - `browser.extract_html` - Extract HTML from selectors
-- `browser.screenshot` - Capture screenshots
+- `browser.screenshot` - Save screenshot to file
+- `browser.visual_snapshot` - Take screenshot + generate element map with bounding boxes
 
-### Visual Navigation
-- `browser.visual_snapshot` - Take screenshot + generate element map with bounding boxes and IDs
-- `browser.click_at` - Click at specific X/Y coordinates for visual workflows
-
-### Specialized Extractors (Production Examples)
-
-Pre-built extractors for common automation targets - demonstrating robust, production-grade scraping patterns:
-
-**Job Scraping:**
-- `jobs.extract_indeed` - Extract Indeed job listings with multi-selector fallbacks, duplicate detection, and anti-bot awareness
-- `jobs.indeed_next_page` - Navigate to next Indeed results page with multiple pagination strategies
-
-**Search:**
-- `search.google` - Search Google and extract results with consent handling and result deobfuscation
-- `search.extract_google` - Extract results from current Google page with multiple container format support
-
-These extractors showcase best practices for building reliable scrapers: fallback selector chains, access issue detection, URL normalization, and filesystem-safe sanitization. Use them as templates for building your own specialized extractors.
+### Specialized Extractors
+- `jobs.extract_indeed` - Extract Indeed job listings (production-ready with fallbacks)
+- `jobs.indeed_next_page` - Navigate to next Indeed page
+- `search.google` - Search Google and extract results
+- `search.extract_google` - Extract results from current Google page
 
 ### File Operations
-- `files.write_text` - Save arbitrary text to files
+- `files.write_text` - Save text to file
 
-## Usage Examples
+---
 
-### Example 1: Scrape Indeed Jobs
+## 📝 Common Use Cases
 
-```javascript
-// Launch browser
-browser.launch({ headless: false })
+### 1. Job Application Automation
 
-// Navigate to Indeed search
-browser.goto({ url: "https://ae.indeed.com/q-ai-engineer-l-dubai-jobs.html" })
-
-// Extract and save jobs
-jobs.extract_indeed({ limit: 20, saveDir: "output/indeed/page-1" })
-
-// Go to next page
-jobs.indeed_next_page()
-
-// Extract more jobs
-jobs.extract_indeed({ limit: 20, saveDir: "output/indeed/page-2" })
-```
-
-### Example 2: Google Search
-
-```javascript
-// Launch browser
-browser.launch({ headless: true })
-
-// Search and extract results
-search.google({
-  query: "remote ai jobs in usa",
-  limit: 10,
-  saveDir: "output/google"
-})
-```
-
-### Example 3: Visual Navigation (Screenshot-Based)
-
-```javascript
-// Launch browser
-browser.launch({ headless: false })
-
-// Navigate to a page
-browser.goto({ url: "https://example.com" })
-
-// Take visual snapshot - AI can "see" the page layout
-browser.visual_snapshot({
-  path: "output/screenshot.png",
-  saveMapPath: "output/element-map.json"
-})
-
-// Click element by ID from the visual map
-browser.click({ elementId: 42 })
-
-// Or click at specific coordinates
-browser.click_at({ x: 350, y: 450 })
-```
-
-**When to use visual navigation:**
-- Complex layouts where DOM structure is hard to parse
-- Obfuscated forms or dynamically generated IDs
-- When you need the AI to "see" the page like a human
-- Shadow DOM or iframe-heavy pages
-
-### Example 4: Stealth Mode with User Profile
-
-```javascript
-// Launch with persistent profile to bypass captchas
-browser.launch({
-  headless: false,
-  userDataDir: "C:/Users/User/AppData/Local/Google/Chrome/User Data",
-  args: ["--disable-blink-features=AutomationControlled"],
-  stealth: true
-})
-```
-
-### Example 5: Connect to Existing Chrome
-
-Start Chrome with remote debugging:
 ```bash
-chrome.exe --remote-debugging-port=9222
+# Interactive mode - fill applications manually with AI assistance
+scripts\run-chrome-profile.bat --kill-chrome
 ```
 
-Then connect:
-```javascript
-browser.connect_cdp({ endpoint: "http://127.0.0.1:9222" })
+Then in Gemini:
+```
+Go to [job application URL]
+Fill out the form with:
+- Name: Mehran Gharooni
+- Email: mehran.gharuni@gmail.com
+- Upload CV from: ./Mehran_Gharooni_CV.pdf
+Submit the application
 ```
 
-## Handling Captchas and Blocks
+### 2. Job Scraping
 
-Indeed and Google may show captchas or block automation. Solutions:
-
-1. **Use headful mode**: `browser.launch({ headless: false })` allows you to solve captchas manually
-2. **Use persistent profiles**: Launch with `userDataDir` to reuse cookies and sessions
-3. **Enable stealth mode**: `browser.launch({ stealth: true })`
-4. **Use existing Chrome**: Connect via CDP to a logged-in Chrome instance
-5. **Change network/IP**: Some blocks are IP-based
-
-## Output Structure
-
-Extracted data is saved as text files:
-
-```
-output/
-├── indeed/
-│   ├── page-1/
-│   │   ├── AI Engineer.txt
-│   │   ├── Machine Learning Engineer.txt
-│   │   └── ...
-│   └── page-2/
-│       └── ...
-└── google/
-    ├── Result Title.txt
-    └── ...
+```bash
+# One-shot - extract 100 jobs and save
+scripts\run-dom-headless.bat -p "Go to Indeed, search for 'AI Engineer Dubai', extract 100 jobs, save to output/jobs"
 ```
 
-Each file contains structured data:
+### 3. Form Filling (Multiple Forms)
+
+Create a script:
+```bash
+@echo off
+for %%F in (jobs\*.txt) do (
+  echo Processing %%F
+  scripts\run-chrome-profile.bat --kill-chrome -p "Go to %%F URL and fill application form" --output logs\%%~nF.log
+  timeout /t 60
+)
 ```
-Title: AI Engineer
-Company: Tech Company
-Location: Dubai, UAE
-Salary: AED 15,000 - 25,000
-URL: https://ae.indeed.com/viewjob?jk=...
-Summary:
-Job description text here...
+
+### 4. Research & Data Collection
+
+```bash
+# Search multiple topics and save results
+scripts\run-dom-headless.bat -p "Search Google for 'remote AI jobs 2026', extract top 20 results, save to output/google/ai-jobs.txt"
 ```
 
-## Architecture
+---
 
-- `src/mcp-browser-server.js` - Main MCP server with tool definitions
-- `src/extractors.js` - Extraction logic for Indeed and Google
-- `src/tests/` - Standalone test scripts
+## 🐛 Troubleshooting
 
-## Dependencies
+### Issue: "Chrome is already running" error
 
-- `@modelcontextprotocol/sdk` - MCP server implementation
-- `playwright` - Browser automation framework
-- `zod` - Schema validation for MCP tools
+**Cause:** Chrome background processes are blocking the profile.
 
-## License
+**Solution:**
+```bash
+# Use --kill-chrome flag
+scripts\run-chrome-profile.bat --kill-chrome
 
-ISC
+# Or manually kill Chrome
+taskkill /F /IM chrome.exe
+```
 
-## Contributing
+### Issue: Gmail says "This browser is not safe"
 
-Contributions welcome! Please feel free to submit issues and pull requests.
+**Cause:** Using Chromium instead of your real Chrome profile.
+
+**Solution:**
+1. Ensure Chrome is completely closed (use `--kill-chrome`)
+2. Verify the browser.launch response shows:
+   ```json
+   {
+     "persistent": true,
+     "userDataDir": "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data",
+     "profileDirectory": "Profile 3"
+   }
+   ```
+3. If still showing `null` values, restart Gemini and try again
+
+### Issue: MCP tools not found
+
+**Cause:** Gemini started in wrong directory or MCP config not loaded.
+
+**Solution:**
+- Always run the `.bat` files from any directory (they auto-fix working directory)
+- Check `.gemini/settings.json` has correct `cwd` path
+- The project includes `scripts/.gemini/settings.json` as backup
+
+### Issue: Browser opens but doesn't use my profile
+
+**Cause:** Environment variables not passing through or Chrome profile locked.
+
+**Solution:**
+1. Use `--kill-chrome` to unlock profile
+2. Check that `run-chrome-profile.bat` outputs:
+   ```
+   Using Chrome executable: C:\Program Files\Google\Chrome\Application\chrome.exe
+   Using Chrome profile: Profile 3
+   ```
+3. If not, the profile detection failed - manually set `MCP_PROFILE=Profile 3` in the .bat file
+
+### Issue: Slow performance or high memory usage
+
+**Cause:** Running headful mode or visual snapshots.
+
+**Solution:**
+- Use `run-dom-headless.bat` for bulk operations
+- Close unnecessary Chrome tabs/extensions
+- Use one-shot mode with `--output` to free resources after each task
+
+---
+
+## 🔒 Security & Privacy
+
+### What Data Is Stored?
+
+- **Logs**: Command outputs saved to `logs/` (git-ignored)
+- **Extracted Data**: Jobs, search results saved to `output/` (git-ignored)
+- **Chrome Profile**: Uses your existing Chrome Profile 3 (no new profile created)
+- **Credentials**: Never stored or transmitted (uses your existing logged-in sessions)
+
+### What Is NOT Stored?
+
+- ❌ Passwords or credentials
+- ❌ Credit card information
+- ❌ Personal identification documents
+- ❌ Browser history (uses temp sessions for non-profile modes)
+
+### Best Practices
+
+1. **Review automation logs** before sharing them (may contain personal info)
+2. **Use dedicated Chrome profile** for automation (not your main profile)
+3. **Test on non-sensitive sites first**
+4. **Never commit `.gemini/` or `logs/` to git** (already in .gitignore)
+5. **Keep your Chrome and Node.js updated** for security patches
+
+---
+
+## 📂 Project Structure
+
+```
+mcp-playwright-browser/
+├── src/
+│   ├── mcp-browser-server.js    # Main MCP server
+│   ├── extractors.js             # Indeed & Google extractors
+│   └── tests/                    # Standalone tests
+├── scripts/
+│   ├── run-chrome-profile.bat    # Chrome with your profile
+│   ├── run-dom-headless.bat      # Fast headless mode
+│   ├── run-visual-headful.bat    # Visual debugging mode
+│   ├── run-cdp-profile.bat       # CDP advanced mode
+│   ├── .gemini/settings.json     # MCP config (workspace fallback)
+│   └── GEMINI.md                 # Fallback instructions
+├── profiles/
+│   ├── dom/                      # DOM mode instructions
+│   ├── visual/                   # Visual mode instructions
+│   └── cdp/                      # CDP mode instructions
+├── .gemini/
+│   └── settings.json             # Main MCP configuration
+├── logs/                         # Execution logs (git-ignored)
+├── output/                       # Extracted data (git-ignored)
+├── GEMINI.md                     # Project-level instructions
+└── README.md                     # This file
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Test your changes with all profiles
+4. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+---
+
+## 📄 License
+
+ISC License - See [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- Built on [Playwright](https://playwright.dev/) for reliable browser automation
+- Uses [Model Context Protocol](https://modelcontextprotocol.io/) for AI integration
+- Inspired by [Microsoft's playwright-mcp](https://github.com/microsoft/playwright-mcp)
+
+---
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/Mhrnqaruni/mcp-playwright-browser/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Mhrnqaruni/mcp-playwright-browser/discussions)
+- **Email**: mehran.gharuni@gmail.com
+
+---
+
+## 🔄 Changelog
+
+### Version 1.1.0 (Current)
+- ✅ Added profile launcher system (.bat files)
+- ✅ Fixed Chrome profile integration with real Chrome
+- ✅ Added `--kill-chrome` flag for background process management
+- ✅ Implemented GEMINI_CLI_MCP_* environment variable support
+- ✅ Added workspace root fallback (scripts/.gemini/)
+- ✅ Fixed prompt parsing (parentheses support)
+- ✅ Added MCP_REQUIRE_PROFILE guard
+- ✅ Enhanced instructions to prevent script creation
+- ✅ Added one-shot mode with automatic logging
+
+### Version 1.0.0
+- Initial release
+- Basic MCP server with Playwright integration
+- Indeed and Google extractors
+- Visual and DOM navigation modes

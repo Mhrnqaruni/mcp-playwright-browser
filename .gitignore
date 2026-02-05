@@ -27,6 +27,8 @@ Thumbs.db
 
 # Gemini CLI settings (contains local paths)
 .gemini/
+!scripts/.gemini/
+scripts/.gemini/state.json
 
 # Playwright
 playwright-report/
@@ -34,3 +36,7 @@ test-results/
 
 # Debug files
 *-debug.*
+
+# Prevent accidental Gemini script artifacts
+*.cjs
+scripts/*.cjs

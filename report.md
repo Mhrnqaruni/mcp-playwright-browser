@@ -56,6 +56,81 @@ Gemini will call tools like:
 - `search.google`, `search.extract_google`
 - `files.write_text` for custom saves
 
+## CLI Profiles (.bat)
+This repo now includes ready-to-run profile launchers under `scripts/`. Each `.bat` sets environment defaults and starts Gemini.
+
+Available profiles:
+- `scripts/run-dom-headless.bat` (fast DOM, headless)
+- `scripts/run-visual-headful.bat` (visual mode with screenshots)
+- `scripts/run-chrome-profile.bat` (real Chrome using a dedicated automation profile at `ChromeForMCP`)
+- `scripts/run-cdp-profile.bat` (auto-launch Chrome via CDP using `ChromeForMCP`)
+
+### Interactive mode
+Run any `.bat` without arguments:
+```bash
+scripts\run-dom-headless.bat
+```
+
+### One-shot (non-interactive) mode + logging
+Pass a prompt and Gemini will run once and exit. Output is saved to a log file:
+```bash
+scripts\run-dom-headless.bat -p "Use MCP server playwrightBrowser. Launch browser. Go to https://example.com. Take a snapshot and close."
+```
+
+Optional: specify an output file:
+```bash
+scripts\run-dom-headless.bat -p "Go to https://example.com and take a snapshot." --output logs\\example.log
+```
+
+Notes:
+- If your prompt contains spaces, wrap it in quotes.
+- Logs are saved under `logs/` by default.
+- The launchers now force the working directory to the repo root, so MCP config is always found even if you run the `.bat` from `scripts/`.
+- Prompt parsing is robust to parentheses and other special characters.
+- There is also a `scripts/.gemini/settings.json` copy to ensure MCP loads even if Gemini’s workspace root is `scripts/`.
+- `scripts/GEMINI.md` provides fallback instructions if Gemini starts with the `scripts/` workspace.
+- `run-chrome-profile.bat` now prefers a real Chrome executable when found (and falls back to the Playwright `chrome` channel).
+- `run-chrome-profile.bat` uses a dedicated user data dir (`%LOCALAPPDATA%\ChromeForMCP`) so it doesn’t clash with your normal Chrome session.
+- Use `--kill-chrome` only if you intentionally set the default Chrome “User Data” directory.
+- If Gmail blocks sign-in, use the CDP profile with the dedicated data dir (`run-cdp-profile.bat`) and log in once.
+
+### Environment Defaults
+The MCP server reads these environment variables as defaults if tool args are not provided.
+For resilience, the launchers also set `GEMINI_CLI_MCP_*` equivalents (e.g., `GEMINI_CLI_MCP_USER_DATA_DIR`) which are always passed through Gemini’s environment sanitization.
+- `MCP_HEADLESS` (true/false)
+- `MCP_SLOWMO_MS` (number)
+- `MCP_ARGS` (semicolon or comma-separated list, or JSON array)
+- `MCP_STEALTH` (true/false)
+- `MCP_CHANNEL` (e.g., `chrome`)
+- `MCP_EXECUTABLE_PATH` (absolute path to chrome.exe)
+- `MCP_USER_DATA_DIR`
+- `MCP_PROFILE` (profile directory, e.g., `Default` or `Profile 3`)
+- `MCP_CDP_ENDPOINT` (optional, e.g., `http://127.0.0.1:9222`)
+- `MCP_CDP_PORT` (number, default 9222)
+- `MCP_CDP_WAIT_MS` (number)
+- `MCP_CDP_AUTO_CLOSE` (true/false)
+- `MCP_CHROME_PATH` (absolute path to chrome.exe)
+- `MCP_FORCE_CDP` (true/false) — disables `browser.launch` when using CDP profile
+- `MCP_REQUIRE_PROFILE` (true/false) — require `userDataDir` for `browser.launch` (prevents accidental Chromium sessions)
+
+Notes:
+- If `userDataDir` points to `...\Profile X` or `...\Default`, the server normalizes it to the parent directory and sets `profileDirectory` automatically.
+- Chrome 136+ blocks automation on the default “User Data” directory. Use a dedicated data dir like `ChromeForMCP` or CDP.
+
+### Profile Instructions
+The `.bat` scripts set `GEMINI_SYSTEM_MD` to profile-specific instructions:
+- DOM profiles use `profiles/dom/system.md`
+- Visual profiles use `profiles/visual/system.md`
+- CDP profiles use `profiles/cdp/system.md`
+
+In one-shot mode, the scripts swap to `profiles/*/oneshot.md` to ensure the browser is closed at the end.
+
+### Script Creation Guardrails
+Gemini should not create custom `.js/.cjs` automation scripts in this repo. The profile instructions now explicitly forbid it.
+They also forbid creating or modifying files under `scripts/` or `src/` and require stopping if MCP tools are unavailable.
+If you ever see unexpected `.cjs` files in `scripts/`, delete them.
+The repo `.gitignore` also ignores `*.cjs` to prevent accidental commits.
+
 ## Running Local Tests
 ```bash
 npm run test:indeed
@@ -67,7 +142,7 @@ npm run test:google
 - Indeed can also require sign-in to view page 2+ of results.
 - If that happens:
   - Use `browser.launch` with `headless: false` so you can solve captchas.
-  - Use a real browser profile via `userDataDir` in `browser.launch` to reuse cookies.
+- Use a real browser profile via `userDataDir` in `browser.launch` to reuse cookies. Chrome 136+ blocks automation on the default “User Data” directory; use a dedicated data dir (e.g., `ChromeForMCP`) or CDP.
   - Try a different network/IP.
 
 Example for a persistent profile:
@@ -76,8 +151,23 @@ Example for a persistent profile:
   "tool": "browser.launch",
   "args": {
     "headless": false,
-    "userDataDir": "C:/Users/User/AppData/Local/Google/Chrome/User Data",
+    "userDataDir": "C:/Users/User/AppData/Local/ChromeForMCP",
+    "profileDirectory": "Default",
+    "channel": "chrome",
     "args": ["--disable-blink-features=AutomationControlled"],
+    "stealth": true
+  }
+}
+```
+
+If you want to auto-launch Chrome with CDP and connect in one step:
+```json
+{
+  "tool": "browser.launch_chrome_cdp",
+  "args": {
+    "userDataDir": "C:/Users/User/AppData/Local/ChromeForMCP",
+    "profileDirectory": "Default",
+    "port": 9222,
     "stealth": true
   }
 }
@@ -96,10 +186,12 @@ If you already have Chrome running with remote debugging enabled, you can connec
 ## Tool Reference (High-Level)
 - `browser.launch`: Start Chromium. Optional `userDataDir` for persistent profiles.
 - `browser.connect_cdp`: Attach to an existing Chrome instance with remote debugging.
+- `browser.launch_chrome_cdp`: Launch Chrome with remote debugging and connect automatically.
 - `browser.goto`: Navigate to a URL.
 - `browser.list`: List clickable elements.
 - `browser.click`: Click by elementId, selector, or text.
 - `browser.snapshot`: Get page summary text and links.
+- `browser.visual_snapshot`: Save a screenshot and return element bounding boxes for visual navigation.
 - `jobs.extract_indeed`: Extract job cards and optionally save to txt.
 - `jobs.indeed_next_page`: Click Indeed “Next” pagination.
 - `search.google`: Open Google search and extract results.
@@ -111,3 +203,19 @@ If you already have Chrome running with remote debugging enabled, you can connec
 - Google results: `output/google/*.txt`
 
 Each `.txt` file is named after the job/result title and contains key fields (title, company, location, salary, URL, snippet).
+
+## Visual (Image) Mode
+If you want Gemini to “look at” the page instead of DOM-only extraction, use:
+
+```
+Use MCP server playwrightBrowser.
+Launch browser (headless false, stealth true).
+Go to https://uniquetechsolution.uk/
+Run browser.visual_snapshot and save to output/screenshots/uniquetech.png with a map at output/screenshots/uniquetech.json.
+Analyze the screenshot and click the elementId that looks like “Contact”.
+```
+
+Gemini can then use:
+- `browser.visual_snapshot` for screenshot + element map (with bounding boxes).
+- `browser.click` by `elementId` (from the returned map).
+- `browser.click_at` by coordinates if needed.

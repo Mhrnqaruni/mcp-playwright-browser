@@ -4,6 +4,7 @@ import * as z from 'zod/v4';
 import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import {
   extractIndeedJobs,
   saveJobsToTxt,
@@ -20,7 +21,12 @@ const state = {
   context: null,
   page: null,
   elements: new Map(),
-  persistent: false
+  persistent: false,
+  cdpConnected: false,
+  cdpManaged: false,
+  cdpAutoClose: false,
+  chromeProcess: null,
+  lastLaunch: null
 };
 
 const DEFAULT_VIEWPORT = { width: 1280, height: 720 };
@@ -38,7 +44,7 @@ function respond(data) {
 
 function ensurePage() {
   if (!state.page) {
-    throw new Error('Browser is not launched. Run browser.launch first.');
+    throw new Error('Browser is not launched. Run browser.launch or browser.connect_cdp first.');
   }
   return state.page;
 }
@@ -50,6 +56,137 @@ function clearElementCache() {
 async function ensureDir(filePath) {
   const dir = path.dirname(path.resolve(filePath));
   await fs.mkdir(dir, { recursive: true });
+}
+
+function readEnvValue(names) {
+  for (const name of names) {
+    if (!name) continue;
+    const raw = process.env[name];
+    if (raw !== undefined) return raw;
+  }
+  return undefined;
+}
+
+function parseEnvBool(name, altName) {
+  const raw = readEnvValue([name, altName]);
+  if (raw === undefined) return undefined;
+  const value = String(raw).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(value)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(value)) return false;
+  return undefined;
+}
+
+function parseEnvNumber(name, altName) {
+  const raw = readEnvValue([name, altName]);
+  if (raw === undefined) return undefined;
+  const value = Number(raw);
+  return Number.isNaN(value) ? undefined : value;
+}
+
+function parseEnvString(name, altName) {
+  const raw = readEnvValue([name, altName]);
+  if (raw === undefined) return undefined;
+  const value = String(raw).trim();
+  return value ? value : undefined;
+}
+
+function parseEnvArgs(name, altName) {
+  const raw = readEnvValue([name, altName]);
+  if (!raw) return undefined;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item)).filter(Boolean);
+      }
+    } catch {
+      // fall back to split parsing
+    }
+  }
+  return trimmed
+    .split(/[;,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+const ENV_DEFAULTS = {
+  headless: parseEnvBool('MCP_HEADLESS', 'GEMINI_CLI_MCP_HEADLESS'),
+  slowMoMs: parseEnvNumber('MCP_SLOWMO_MS', 'GEMINI_CLI_MCP_SLOWMO_MS'),
+  args: parseEnvArgs('MCP_ARGS', 'GEMINI_CLI_MCP_ARGS'),
+  stealth: parseEnvBool('MCP_STEALTH', 'GEMINI_CLI_MCP_STEALTH'),
+  channel: parseEnvString('MCP_CHANNEL', 'GEMINI_CLI_MCP_CHANNEL'),
+  executablePath: parseEnvString('MCP_EXECUTABLE_PATH', 'GEMINI_CLI_MCP_EXECUTABLE_PATH'),
+  userDataDir: parseEnvString('MCP_USER_DATA_DIR', 'GEMINI_CLI_MCP_USER_DATA_DIR'),
+  profileDirectory: parseEnvString('MCP_PROFILE', 'GEMINI_CLI_MCP_PROFILE'),
+  cdpEndpoint: parseEnvString('MCP_CDP_ENDPOINT', 'GEMINI_CLI_MCP_CDP_ENDPOINT'),
+  cdpPort: parseEnvNumber('MCP_CDP_PORT', 'GEMINI_CLI_MCP_CDP_PORT'),
+  cdpWaitMs: parseEnvNumber('MCP_CDP_WAIT_MS', 'GEMINI_CLI_MCP_CDP_WAIT_MS'),
+  cdpAutoClose: parseEnvBool('MCP_CDP_AUTO_CLOSE', 'GEMINI_CLI_MCP_CDP_AUTO_CLOSE'),
+  chromePath: parseEnvString('MCP_CHROME_PATH', 'GEMINI_CLI_MCP_CHROME_PATH'),
+  forceCdp: parseEnvBool('MCP_FORCE_CDP', 'GEMINI_CLI_MCP_FORCE_CDP'),
+  requireProfile: parseEnvBool('MCP_REQUIRE_PROFILE', 'GEMINI_CLI_MCP_REQUIRE_PROFILE')
+};
+
+function hasDefaultChromeUserDataDir(userDataDir) {
+  if (!userDataDir) return false;
+  return /(^|\\)Google\\Chrome\\User Data(\\|$)/i.test(userDataDir);
+}
+
+function normalizeProfilePath(userDataDir, profileDirectory) {
+  if (!userDataDir) {
+    return { userDataDir, profileDirectory, warnings: [] };
+  }
+  const normalized = path.normalize(userDataDir);
+  const base = path.basename(normalized);
+  const warnings = [];
+  const profileMatch = /^(Profile \d+|Default)$/i;
+  if (profileMatch.test(base)) {
+    const parent = path.dirname(normalized);
+    if (profileDirectory && profileDirectory !== base) {
+      warnings.push(
+        `userDataDir pointed to "${base}" but profileDirectory was "${profileDirectory}". Using parent userDataDir with provided profileDirectory.`
+      );
+      return { userDataDir: parent, profileDirectory, warnings };
+    }
+    warnings.push(`userDataDir pointed to profile folder "${base}". Normalized to parent and set profileDirectory.`);
+    return { userDataDir: parent, profileDirectory: base, warnings };
+  }
+  return { userDataDir, profileDirectory, warnings };
+}
+
+async function resolveChromePath(explicitPath) {
+  if (explicitPath) return explicitPath;
+  const programFiles = process.env['PROGRAMFILES'] || 'C:\\Program Files';
+  const programFilesX86 = process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)';
+  const localAppData =
+    process.env['LOCALAPPDATA'] || path.join(process.env['USERPROFILE'] || 'C:\\Users\\User', 'AppData\\Local');
+  const candidates = [
+    path.join(programFiles, 'Google\\Chrome\\Application\\chrome.exe'),
+    path.join(programFilesX86, 'Google\\Chrome\\Application\\chrome.exe'),
+    path.join(localAppData, 'Google\\Chrome\\Application\\chrome.exe')
+  ];
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // keep searching
+    }
+  }
+  return null;
+}
+
+function buildArgs(baseArgs, profileDirectory) {
+  const args = Array.isArray(baseArgs) ? [...baseArgs] : [];
+  if (profileDirectory) {
+    const hasProfileArg = args.some((arg) => arg.startsWith('--profile-directory='));
+    if (!hasProfileArg) {
+      args.push(`--profile-directory=${profileDirectory}`);
+    }
+  }
+  return args;
 }
 
 const server = new McpServer({
@@ -66,6 +203,9 @@ server.registerTool(
       slowMoMs: z.number().optional(),
       args: z.array(z.string()).optional(),
       stealth: z.boolean().optional(),
+      channel: z.string().optional(),
+      executablePath: z.string().optional(),
+      profileDirectory: z.string().optional(),
       viewport: z
         .object({
           width: z.number(),
@@ -76,7 +216,47 @@ server.registerTool(
       userDataDir: z.string().optional()
     }
   },
-  async ({ headless, slowMoMs, viewport, userAgent, userDataDir, args, stealth }) => {
+  async ({
+    headless,
+    slowMoMs,
+    viewport,
+    userAgent,
+    userDataDir,
+    args,
+    stealth,
+    channel,
+    executablePath,
+    profileDirectory
+  }) => {
+    if (ENV_DEFAULTS.forceCdp) {
+      throw new Error('browser.launch is disabled in CDP mode. Use browser.launch_chrome_cdp instead.');
+    }
+    const resolvedHeadless = headless ?? ENV_DEFAULTS.headless ?? false;
+    const resolvedSlowMoMs = slowMoMs ?? ENV_DEFAULTS.slowMoMs ?? 0;
+    const resolvedArgs = args ?? ENV_DEFAULTS.args ?? [];
+    const resolvedStealth = stealth ?? ENV_DEFAULTS.stealth ?? false;
+    const resolvedChannel = channel ?? ENV_DEFAULTS.channel;
+    const resolvedExecutablePath = executablePath ?? ENV_DEFAULTS.executablePath;
+    const resolvedUserDataDir = userDataDir ?? ENV_DEFAULTS.userDataDir;
+    const resolvedProfileDirectory = profileDirectory ?? ENV_DEFAULTS.profileDirectory;
+    const normalized = normalizeProfilePath(resolvedUserDataDir, resolvedProfileDirectory);
+    const normalizedUserDataDir = normalized.userDataDir;
+    const normalizedProfileDirectory = normalized.profileDirectory;
+
+    if (resolvedChannel && resolvedExecutablePath) {
+      throw new Error('Provide either channel or executablePath, not both.');
+    }
+    if (ENV_DEFAULTS.requireProfile && !normalizedUserDataDir) {
+      throw new Error('Profile launch required but no userDataDir was provided. Check MCP_USER_DATA_DIR.');
+    }
+    if (normalizedProfileDirectory && !normalizedUserDataDir) {
+      throw new Error('profileDirectory requires userDataDir (persistent context).');
+    }
+    if (normalizedUserDataDir && hasDefaultChromeUserDataDir(normalizedUserDataDir) && (resolvedChannel || resolvedExecutablePath)) {
+      throw new Error(
+        'Chrome blocks automation on the default "User Data" directory (Chrome 136+). Use a dedicated userDataDir (e.g. ChromeForMCP) or browser.launch_chrome_cdp.'
+      );
+    }
     if (state.context) {
       await state.context.close();
     } else if (state.browser) {
@@ -86,22 +266,43 @@ server.registerTool(
     state.context = null;
     state.page = null;
     state.persistent = false;
+    state.cdpConnected = false;
+    state.cdpManaged = false;
+    state.cdpAutoClose = false;
+    state.chromeProcess = null;
 
-    if (userDataDir) {
-      state.context = await chromium.launchPersistentContext(userDataDir, {
-        headless: headless ?? false,
-        slowMo: slowMoMs ?? 0,
+    const launchArgs = buildArgs(resolvedArgs, normalizedProfileDirectory);
+    state.lastLaunch = {
+      headless: resolvedHeadless,
+      slowMoMs: resolvedSlowMoMs,
+      args: launchArgs,
+      stealth: resolvedStealth,
+      channel: resolvedChannel || null,
+      executablePath: resolvedExecutablePath || null,
+      userDataDir: normalizedUserDataDir || null,
+      profileDirectory: normalizedProfileDirectory || null,
+      userAgent: userAgent || null,
+      viewport: viewport ?? DEFAULT_VIEWPORT
+    };
+    if (normalizedUserDataDir) {
+      state.context = await chromium.launchPersistentContext(normalizedUserDataDir, {
+        headless: resolvedHeadless,
+        slowMo: resolvedSlowMoMs,
         viewport: viewport ?? DEFAULT_VIEWPORT,
         userAgent: userAgent || undefined,
-        args: args || []
+        args: launchArgs,
+        channel: resolvedChannel || undefined,
+        executablePath: resolvedExecutablePath || undefined
       });
       state.browser = state.context.browser();
       state.persistent = true;
     } else {
       state.browser = await chromium.launch({
-        headless: headless ?? false,
-        slowMo: slowMoMs ?? 0,
-        args: args || []
+        headless: resolvedHeadless,
+        slowMo: resolvedSlowMoMs,
+        args: launchArgs,
+        channel: resolvedChannel || undefined,
+        executablePath: resolvedExecutablePath || undefined
       });
 
       state.context = await state.browser.newContext({
@@ -110,7 +311,7 @@ server.registerTool(
       });
     }
 
-    if (stealth) {
+    if (resolvedStealth) {
       await state.context.addInitScript(() => {
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
         Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
@@ -120,17 +321,34 @@ server.registerTool(
 
     const pages = state.context.pages();
     state.page = pages.length ? pages[0] : await state.context.newPage();
-    if (stealth && pages.length) {
+    if (resolvedStealth && pages.length) {
       await state.page.reload({ waitUntil: 'domcontentloaded' });
     }
 
     clearElementCache();
 
+    const warnings = [];
+    warnings.push(...normalized.warnings);
+    if (normalizedUserDataDir && hasDefaultChromeUserDataDir(normalizedUserDataDir)) {
+      warnings.push(
+        'Using default Chrome "User Data" may be locked if Chrome is open. Prefer a dedicated profile directory.'
+      );
+    }
+
+    const browserVersion = state.browser ? state.browser.version() : null;
+
     return respond({
       status: 'launched',
-      headless: headless ?? false,
+      headless: resolvedHeadless,
       viewport: viewport ?? DEFAULT_VIEWPORT,
-      persistent: state.persistent
+      persistent: state.persistent,
+      browserVersion,
+      channel: resolvedChannel || null,
+      executablePath: resolvedExecutablePath || null,
+      userDataDir: normalizedUserDataDir || null,
+      profileDirectory: normalizedProfileDirectory || null,
+      args: launchArgs,
+      warnings
     });
   }
 );
@@ -145,25 +363,166 @@ server.registerTool(
     }
   },
   async ({ endpoint, slowMoMs }) => {
-    const url = endpoint || 'http://127.0.0.1:9222';
+    const resolvedEndpoint =
+      endpoint || ENV_DEFAULTS.cdpEndpoint || (ENV_DEFAULTS.cdpPort ? `http://127.0.0.1:${ENV_DEFAULTS.cdpPort}` : null);
+    const url = resolvedEndpoint || 'http://127.0.0.1:9222';
     if (state.context) {
       await state.context.close();
     } else if (state.browser) {
       await state.browser.close();
     }
 
-    state.browser = await chromium.connectOverCDP(url, { slowMo: slowMoMs ?? 0 });
+    state.browser = await chromium.connectOverCDP(url, { slowMo: slowMoMs ?? ENV_DEFAULTS.slowMoMs ?? 0 });
     const contexts = state.browser.contexts();
     state.context = contexts.length ? contexts[0] : await state.browser.newContext();
     const pages = state.context.pages();
     state.page = pages.length ? pages[0] : await state.context.newPage();
     state.persistent = true;
+    state.cdpConnected = true;
+    state.cdpManaged = false;
+    state.cdpAutoClose = false;
+    state.chromeProcess = null;
     clearElementCache();
 
     return respond({
       status: 'connected',
       endpoint: url,
       pages: pages.length
+    });
+  }
+);
+
+server.registerTool(
+  'browser.launch_chrome_cdp',
+  {
+    description: 'Launch Chrome with remote debugging enabled and connect via CDP.',
+    inputSchema: {
+      chromePath: z.string().optional(),
+      userDataDir: z.string().optional(),
+      profileDirectory: z.string().optional(),
+      port: z.number().optional(),
+      args: z.array(z.string()).optional(),
+      headless: z.boolean().optional(),
+      slowMoMs: z.number().optional(),
+      stealth: z.boolean().optional(),
+      waitMs: z.number().optional(),
+      autoClose: z.boolean().optional()
+    }
+  },
+  async ({ chromePath, userDataDir, profileDirectory, port, args, headless, slowMoMs, stealth, waitMs, autoClose }) => {
+    const resolvedChromePath = chromePath ?? ENV_DEFAULTS.chromePath;
+    const resolvedUserDataDir = userDataDir ?? ENV_DEFAULTS.userDataDir;
+    const resolvedProfileDirectory = profileDirectory ?? ENV_DEFAULTS.profileDirectory;
+    const normalized = normalizeProfilePath(resolvedUserDataDir, resolvedProfileDirectory);
+    const normalizedUserDataDir = normalized.userDataDir;
+    const normalizedProfileDirectory = normalized.profileDirectory;
+    const resolvedPort = port ?? ENV_DEFAULTS.cdpPort ?? 9222;
+    const resolvedArgs = args ?? ENV_DEFAULTS.args ?? [];
+    const resolvedHeadless = headless ?? ENV_DEFAULTS.headless ?? false;
+    const resolvedSlowMoMs = slowMoMs ?? ENV_DEFAULTS.slowMoMs ?? 0;
+    const resolvedStealth = stealth ?? ENV_DEFAULTS.stealth ?? false;
+    const resolvedWaitMs = waitMs ?? ENV_DEFAULTS.cdpWaitMs ?? 5000;
+    const resolvedAutoClose = autoClose ?? ENV_DEFAULTS.cdpAutoClose ?? false;
+
+    if (normalizedProfileDirectory && !normalizedUserDataDir) {
+      throw new Error('profileDirectory requires userDataDir.');
+    }
+    if (normalizedUserDataDir && hasDefaultChromeUserDataDir(normalizedUserDataDir)) {
+      throw new Error(
+        'Chrome blocks CDP automation on the default "User Data" directory (Chrome 136+). Use a dedicated userDataDir (e.g. ChromeForMCP).'
+      );
+    }
+    if (state.context) {
+      await state.context.close();
+    } else if (state.browser) {
+      await state.browser.close();
+    }
+
+    const resolvedChrome = await resolveChromePath(resolvedChromePath);
+    if (!resolvedChrome) {
+      throw new Error('Unable to locate chrome.exe. Provide chromePath explicitly.');
+    }
+
+    const cdpPort = resolvedPort;
+    const dataDir = normalizedUserDataDir || path.join(process.env['LOCALAPPDATA'] || process.cwd(), 'ChromeForMCP');
+    const launchArgs = buildArgs(resolvedArgs, normalizedProfileDirectory);
+    if (!launchArgs.some((arg) => arg.startsWith('--remote-debugging-port='))) {
+      launchArgs.push(`--remote-debugging-port=${cdpPort}`);
+    }
+    if (!launchArgs.some((arg) => arg.startsWith('--user-data-dir='))) {
+      launchArgs.push(`--user-data-dir=${dataDir}`);
+    }
+    if (resolvedHeadless) {
+      if (!launchArgs.some((arg) => arg.startsWith('--headless'))) {
+        launchArgs.push('--headless=new');
+      }
+    }
+
+    const chromeProcess = spawn(resolvedChrome, launchArgs, {
+      detached: true,
+      stdio: 'ignore'
+    });
+    chromeProcess.unref();
+
+    const timeoutMs = resolvedWaitMs;
+    const start = Date.now();
+    let connected = false;
+    let lastError = null;
+    while (Date.now() - start < timeoutMs) {
+      try {
+        state.browser = await chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`, { slowMo: resolvedSlowMoMs });
+        connected = true;
+        break;
+      } catch (error) {
+        lastError = error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+
+    if (!connected) {
+      throw new Error(`Failed to connect to Chrome CDP on port ${cdpPort}. ${lastError || ''}`.trim());
+    }
+
+    state.chromeProcess = chromeProcess;
+    state.cdpConnected = true;
+    state.cdpManaged = true;
+    state.cdpAutoClose = resolvedAutoClose;
+    state.persistent = true;
+
+    const contexts = state.browser.contexts();
+    state.context = contexts.length ? contexts[0] : await state.browser.newContext();
+    if (resolvedStealth) {
+      await state.context.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+        Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+      });
+    }
+    const pages = state.context.pages();
+    state.page = pages.length ? pages[0] : await state.context.newPage();
+    if (resolvedStealth && pages.length) {
+      await state.page.reload({ waitUntil: 'domcontentloaded' });
+    }
+
+    clearElementCache();
+
+    const warnings = [...normalized.warnings];
+    if (hasDefaultChromeUserDataDir(dataDir)) {
+      warnings.push('Using default Chrome "User Data" with CDP is blocked in recent Chrome versions. Use a dedicated data dir.');
+    }
+
+    const browserVersion = state.browser ? state.browser.version() : null;
+
+    return respond({
+      status: 'launched',
+      chromePath: resolvedChrome,
+      endpoint: `http://127.0.0.1:${cdpPort}`,
+      userDataDir: dataDir,
+      persistent: true,
+      browserVersion,
+      profileDirectory: normalizedProfileDirectory || null,
+      args: launchArgs,
+      warnings
     });
   }
 );
@@ -188,16 +547,34 @@ server.registerTool(
   'browser.close',
   {
     description: 'Close the current browser session.',
-    inputSchema: {}
+    inputSchema: {
+      terminateChrome: z.boolean().optional()
+    }
   },
-  async () => {
-    if (state.context) {
+  async ({ terminateChrome }) => {
+    if (state.cdpConnected) {
+      if (state.browser) {
+        await state.browser.close();
+      }
+      if ((terminateChrome || state.cdpAutoClose) && state.chromeProcess?.pid) {
+        try {
+          process.kill(state.chromeProcess.pid);
+        } catch {
+          // ignore
+        }
+      }
+    } else if (state.context) {
       await state.context.close();
     }
     state.browser = null;
     state.context = null;
     state.page = null;
     state.persistent = false;
+    state.cdpConnected = false;
+    state.cdpManaged = false;
+    state.cdpAutoClose = false;
+    state.chromeProcess = null;
+    state.lastLaunch = null;
     clearElementCache();
     return respond({ status: 'closed' });
   }
@@ -494,6 +871,100 @@ server.registerTool(
     await ensureDir(targetPath);
     await page.screenshot({ path: targetPath, fullPage: fullPage ?? true });
     return respond({ status: 'saved', path: path.resolve(targetPath) });
+  }
+);
+
+server.registerTool(
+  'browser.visual_snapshot',
+  {
+    description: 'Take a screenshot and return an element map with bounding boxes for visual navigation.',
+    inputSchema: {
+      path: z.string(),
+      fullPage: z.boolean().optional(),
+      limit: z.number().optional(),
+      interactiveOnly: z.boolean().optional(),
+      saveMapPath: z.string().optional()
+    }
+  },
+  async ({ path: targetPath, fullPage, limit, interactiveOnly, saveMapPath }) => {
+    const page = ensurePage();
+    await ensureDir(targetPath);
+    await page.screenshot({ path: targetPath, fullPage: fullPage ?? true });
+
+    clearElementCache();
+    const selector = interactiveOnly === false
+      ? '*'
+      : 'a[href], button, input, select, textarea, [role="button"], [role="link"], [onclick]';
+
+    const handles = await page.$$(selector);
+    const items = [];
+    let id = 1;
+
+    for (const handle of handles) {
+      const box = await handle.boundingBox();
+      if (!box || box.width < 1 || box.height < 1) continue;
+
+      const info = await handle.evaluate((node) => {
+        const text = (node.innerText || node.getAttribute('aria-label') || node.getAttribute('title') || node.getAttribute('value') || '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        return {
+          tag: node.tagName.toLowerCase(),
+          text,
+          href: node.getAttribute('href') || '',
+          ariaLabel: node.getAttribute('aria-label') || ''
+        };
+      });
+
+      state.elements.set(id, handle);
+      items.push({
+        id,
+        ...info,
+        bbox: {
+          x: Math.round(box.x),
+          y: Math.round(box.y),
+          width: Math.round(box.width),
+          height: Math.round(box.height)
+        }
+      });
+      id += 1;
+
+      if (limit && items.length >= limit) break;
+    }
+
+    const payload = {
+      screenshotPath: path.resolve(targetPath),
+      count: items.length,
+      items,
+      viewport: page.viewportSize()
+    };
+
+    if (saveMapPath) {
+      await ensureDir(saveMapPath);
+      await fs.writeFile(saveMapPath, JSON.stringify(payload, null, 2), 'utf8');
+      payload.mapSavedTo = path.resolve(saveMapPath);
+    }
+
+    return respond(payload);
+  }
+);
+
+server.registerTool(
+  'browser.click_at',
+  {
+    description: 'Click at specific page coordinates (x, y). Useful for visual workflows.',
+    inputSchema: {
+      x: z.number(),
+      y: z.number(),
+      button: z.enum(['left', 'middle', 'right']).optional(),
+      clickCount: z.number().optional()
+    }
+  },
+  async ({ x, y, button, clickCount }) => {
+    const page = ensurePage();
+    await page.mouse.click(x, y, { button: button || 'left', clickCount: clickCount || 1 });
+    clearElementCache();
+    return respond({ status: 'clicked', x, y });
   }
 );
 

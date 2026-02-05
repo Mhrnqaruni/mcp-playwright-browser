@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "playwrightBrowser": {
+      "command": "node",
+      "args": [
+        "src/mcp-browser-server.js"
+      ],
+      "cwd": "C:/Users/User/Desktop/Applying for Job/Auto"
+    }
+  }
+}
