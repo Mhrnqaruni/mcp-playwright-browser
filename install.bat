@@ -10,7 +10,7 @@ REM Check if git is installed
 where git >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Git is not installed!
-    echo Please install Git from: https://git-scm.com/download/win
+    echo Please install Git from https://git-scm.com/download/win
     pause
     exit /b 1
 )
@@ -19,7 +19,7 @@ REM Check if Node.js is installed
 where node >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Node.js is not installed!
-    echo Please install Node.js from: https://nodejs.org/
+    echo Please install Node.js from https://nodejs.org/
     pause
     exit /b 1
 )
@@ -28,7 +28,7 @@ REM Check if npm is installed
 where npm >nul 2>&1
 if %ERRORLEVEL% neq 0 (
     echo ERROR: npm is not installed!
-    echo Please install Node.js (includes npm) from: https://nodejs.org/
+    echo Please install Node.js (includes npm^) from https://nodejs.org/
     pause
     exit /b 1
 )
@@ -193,7 +193,7 @@ echo ========================================
 echo   1. Make sure Gemini CLI is installed:
 echo      npm install -g @google/gemini-cli
 echo.
-echo   2. Disable Chrome background apps (recommended):
+echo   2. Disable Chrome background apps (recommended^):
 echo      Chrome Settings ^> System ^>
 echo      Uncheck "Continue running background apps"
 echo.
