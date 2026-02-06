@@ -93,6 +93,7 @@ Notes:
 - `run-chrome-profile.bat` uses a dedicated user data dir (`%LOCALAPPDATA%\ChromeForMCP`) so it doesn’t clash with your normal Chrome session.
 - Use `--kill-chrome` only if you intentionally set the default Chrome “User Data” directory.
 - If Gmail blocks sign-in, use the CDP profile with the dedicated data dir (`run-cdp-profile.bat`) and log in once.
+- `run-cdp-profile.bat` now force-closes any Chrome processes that are using `ChromeForMCP` before launching, so the headful window always appears.
 
 ### Environment Defaults
 The MCP server reads these environment variables as defaults if tool args are not provided.
@@ -187,6 +188,12 @@ If you already have Chrome running with remote debugging enabled, you can connec
 - `browser.launch`: Start Chromium. Optional `userDataDir` for persistent profiles.
 - `browser.connect_cdp`: Attach to an existing Chrome instance with remote debugging.
 - `browser.launch_chrome_cdp`: Launch Chrome with remote debugging and connect automatically.
+- `browser.get_scroll_state`: Read window scroll metrics to decide if more content exists.
+- `browser.scroll_by`: Scroll the main page by a delta.
+- `browser.scroll_to`: Scroll the main page to an absolute position.
+- `browser.get_scrollables`: List scrollable containers on the page.
+- `browser.get_container_scroll_state`: Read scroll metrics for a container selector.
+- `browser.scroll_container`: Scroll a specific container by selector.
 - `browser.goto`: Navigate to a URL.
 - `browser.list`: List clickable elements.
 - `browser.click`: Click by elementId, selector, or text.

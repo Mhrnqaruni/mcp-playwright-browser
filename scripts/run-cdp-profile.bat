@@ -27,6 +27,9 @@ set PROFILE_SYSTEM_MD_ONESHOT=%ROOT%\profiles\cdp\oneshot.md
 if not exist "%ROOT%\logs" mkdir "%ROOT%\logs"
 if not exist "%MCP_USER_DATA_DIR%" mkdir "%MCP_USER_DATA_DIR%"
 
+REM Close any Chrome processes using the dedicated CDP user data dir
+powershell -NoProfile -Command "$dir = $env:LOCALAPPDATA + '\\ChromeForMCP'; Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -and $_.CommandLine -match [regex]::Escape($dir) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >NUL 2>&1
+
 set PROMPT=
 set OUTPUT=
 

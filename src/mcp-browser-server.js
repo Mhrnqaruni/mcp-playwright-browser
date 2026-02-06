@@ -452,6 +452,17 @@ server.registerTool(
     if (!launchArgs.some((arg) => arg.startsWith('--user-data-dir='))) {
       launchArgs.push(`--user-data-dir=${dataDir}`);
     }
+    if (!resolvedHeadless) {
+      const hasNewWindow = launchArgs.some((arg) => arg === '--new-window');
+      const hasWindowSize = launchArgs.some((arg) => arg.startsWith('--window-size='));
+      const hasStartMax = launchArgs.some((arg) => arg === '--start-maximized');
+      if (!hasNewWindow) {
+        launchArgs.push('--new-window');
+      }
+      if (!hasWindowSize && !hasStartMax) {
+        launchArgs.push('--start-maximized');
+      }
+    }
     if (resolvedHeadless) {
       if (!launchArgs.some((arg) => arg.startsWith('--headless'))) {
         launchArgs.push('--headless=new');
@@ -657,6 +668,243 @@ server.registerTool(
       return respond({ status: 'waited', ms });
     }
     return respond({ status: 'no-op' });
+  }
+);
+
+server.registerTool(
+  'browser.get_scroll_state',
+  {
+    description: 'Get scroll metrics for the main page (window).',
+    inputSchema: {}
+  },
+  async () => {
+    const page = ensurePage();
+    const metrics = await page.evaluate(() => {
+      const el = document.scrollingElement || document.documentElement;
+      const scrollTop = el.scrollTop || 0;
+      const scrollHeight = el.scrollHeight || 0;
+      const clientHeight = el.clientHeight || 0;
+      return {
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        atBottom: scrollTop + clientHeight >= scrollHeight - 2
+      };
+    });
+    return respond(metrics);
+  }
+);
+
+server.registerTool(
+  'browser.scroll_by',
+  {
+    description: 'Scroll the main page by a delta.',
+    inputSchema: {
+      dx: z.number().optional(),
+      dy: z.number().optional()
+    }
+  },
+  async ({ dx, dy }) => {
+    const page = ensurePage();
+    const deltaX = dx ?? 0;
+    const deltaY = dy ?? 0;
+    if (!deltaX && !deltaY) {
+      throw new Error('Provide dx or dy for scrolling.');
+    }
+    const metrics = await page.evaluate(({ deltaX, deltaY }) => {
+      window.scrollBy(deltaX, deltaY);
+      const el = document.scrollingElement || document.documentElement;
+      const scrollTop = el.scrollTop || 0;
+      const scrollHeight = el.scrollHeight || 0;
+      const clientHeight = el.clientHeight || 0;
+      return {
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        atBottom: scrollTop + clientHeight >= scrollHeight - 2
+      };
+    }, { deltaX, deltaY });
+    clearElementCache();
+    return respond({ status: 'scrolled', ...metrics });
+  }
+);
+
+server.registerTool(
+  'browser.scroll_to',
+  {
+    description: 'Scroll the main page to an absolute position.',
+    inputSchema: {
+      x: z.number().optional(),
+      y: z.number().optional()
+    }
+  },
+  async ({ x, y }) => {
+    const page = ensurePage();
+    const targetX = x ?? 0;
+    const targetY = y ?? 0;
+    const metrics = await page.evaluate(({ targetX, targetY }) => {
+      window.scrollTo(targetX, targetY);
+      const el = document.scrollingElement || document.documentElement;
+      const scrollTop = el.scrollTop || 0;
+      const scrollHeight = el.scrollHeight || 0;
+      const clientHeight = el.clientHeight || 0;
+      return {
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        atBottom: scrollTop + clientHeight >= scrollHeight - 2
+      };
+    }, { targetX, targetY });
+    clearElementCache();
+    return respond({ status: 'scrolled', ...metrics });
+  }
+);
+
+server.registerTool(
+  'browser.get_scrollables',
+  {
+    description: 'List scrollable containers on the page.',
+    inputSchema: {
+      limit: z.number().optional()
+    }
+  },
+  async ({ limit }) => {
+    const page = ensurePage();
+    const items = await page.evaluate(({ limit }) => {
+      const maxItems = limit || 25;
+      const results = [];
+      const escapeCss = (value) => {
+        if (window.CSS && CSS.escape) return CSS.escape(value);
+        return value.replace(/([ #;?%&,.+*~':"!^$\\[\\]()=>|\/@])/g, '\\\\$1');
+      };
+      const makeSelector = (el) => {
+        if (el.id) return `#${escapeCss(el.id)}`;
+        const testId = el.getAttribute('data-testid');
+        if (testId) return `[data-testid="${escapeCss(testId)}"]`;
+        const aria = el.getAttribute('aria-label');
+        if (aria) return `[aria-label="${escapeCss(aria)}"]`;
+        const role = el.getAttribute('role');
+        if (role) return `${el.tagName.toLowerCase()}[role="${escapeCss(role)}"]`;
+        const parts = [];
+        let node = el;
+        while (node && node.nodeType === 1 && node !== document.body && node !== document.documentElement) {
+          let part = node.tagName.toLowerCase();
+          const siblings = Array.from(node.parentElement?.children || []).filter((n) => n.tagName === node.tagName);
+          if (siblings.length > 1) {
+            const index = siblings.indexOf(node) + 1;
+            part += `:nth-of-type(${index})`;
+          }
+          parts.unshift(part);
+          node = node.parentElement;
+          if (parts.length >= 5) break;
+        }
+        return parts.join(' > ') || el.tagName.toLowerCase();
+      };
+
+      const elements = Array.from(document.querySelectorAll('body *'));
+      for (const el of elements) {
+        if (results.length >= maxItems) break;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 2 || rect.height < 2) continue;
+        const overflowY = style.overflowY;
+        const overflowX = style.overflowX;
+        const scrollableY = (overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight - el.clientHeight > 2;
+        const scrollableX = (overflowX === 'auto' || overflowX === 'scroll') && el.scrollWidth - el.clientWidth > 2;
+        if (!scrollableY && !scrollableX) continue;
+        const selector = makeSelector(el);
+        results.push({
+          selector,
+          tag: el.tagName.toLowerCase(),
+          id: el.id || '',
+          className: el.className || '',
+          ariaLabel: el.getAttribute('aria-label') || '',
+          role: el.getAttribute('role') || '',
+          scrollHeight: el.scrollHeight,
+          clientHeight: el.clientHeight,
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+          bbox: {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          }
+        });
+      }
+      return results;
+    }, { limit });
+    return respond({ count: items.length, items });
+  }
+);
+
+server.registerTool(
+  'browser.get_container_scroll_state',
+  {
+    description: 'Get scroll metrics for a specific scrollable container.',
+    inputSchema: {
+      selector: z.string()
+    }
+  },
+  async ({ selector }) => {
+    const page = ensurePage();
+    const metrics = await page.evaluate(({ selector }) => {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const scrollTop = el.scrollTop || 0;
+      const scrollHeight = el.scrollHeight || 0;
+      const clientHeight = el.clientHeight || 0;
+      return {
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        atBottom: scrollTop + clientHeight >= scrollHeight - 2
+      };
+    }, { selector });
+    if (!metrics) {
+      throw new Error(`No element found for selector: ${selector}`);
+    }
+    return respond(metrics);
+  }
+);
+
+server.registerTool(
+  'browser.scroll_container',
+  {
+    description: 'Scroll a specific container by selector.',
+    inputSchema: {
+      selector: z.string(),
+      dx: z.number().optional(),
+      dy: z.number().optional()
+    }
+  },
+  async ({ selector, dx, dy }) => {
+    const page = ensurePage();
+    const deltaX = dx ?? 0;
+    const deltaY = dy ?? 0;
+    if (!deltaX && !deltaY) {
+      throw new Error('Provide dx or dy for scrolling.');
+    }
+    const metrics = await page.evaluate(({ selector, deltaX, deltaY }) => {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      el.scrollBy(deltaX, deltaY);
+      const scrollTop = el.scrollTop || 0;
+      const scrollHeight = el.scrollHeight || 0;
+      const clientHeight = el.clientHeight || 0;
+      return {
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        atBottom: scrollTop + clientHeight >= scrollHeight - 2
+      };
+    }, { selector, deltaX, deltaY });
+    if (!metrics) {
+      throw new Error(`No element found for selector: ${selector}`);
+    }
+    clearElementCache();
+    return respond({ status: 'scrolled', ...metrics });
   }
 );
 

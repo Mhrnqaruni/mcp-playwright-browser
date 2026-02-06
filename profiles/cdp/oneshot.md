@@ -16,6 +16,8 @@ Use MCP server `playwrightBrowser` for browser actions.
 - Rely on MCP defaults for `userDataDir` and `profileDirectory`. Do NOT pass them manually.
 - Otherwise use DOM tools: `browser.snapshot`, `browser.list`, `browser.extract_text`, `browser.extract_html`, `browser.click`, `browser.type`.
 - After any click, navigation, or page change, refresh element IDs with `browser.list` before using `elementId` again.
+- For long pages, check `browser.get_scroll_state` and scroll with `browser.scroll_by` until `atBottom` is true (or no new content after several scrolls). Then continue.
+- If the page doesn’t scroll but content looks truncated, call `browser.get_scrollables` and use `browser.scroll_container` on the relevant container, then re-scan.
 - Do NOT create custom scripts to automate the browser. Use MCP tools only.
 - Do not read repo files (README, scripts) to “discover” MCP usage. Assume MCP tools are available and start the browser immediately.
 - If a login or captcha appears, stop and wait for the user.
