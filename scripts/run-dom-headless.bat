@@ -20,6 +20,7 @@ if not exist "%ROOT%\logs" mkdir "%ROOT%\logs"
 
 set PROMPT=
 set OUTPUT=
+set RESUME=
 
 call :parse_args %*
 goto run
@@ -46,6 +47,12 @@ if /I "%~1"=="--output" (
   shift
   goto parse_loop
 )
+if /I "%~1"=="--resume" (
+  set "RESUME=%~2"
+  shift
+  shift
+  goto parse_loop
+)
 if /I "%~1"=="--" (
   shift
   set "PROMPT=%*"
@@ -59,7 +66,7 @@ if defined PROMPT (
 shift
 goto parse_loop
 :parse_done
-endlocal & set "PROMPT=%PROMPT%" & set "OUTPUT=%OUTPUT%"
+endlocal & set "PROMPT=%PROMPT%" & set "OUTPUT=%OUTPUT%" & set "RESUME=%RESUME%"
 exit /b
 
 :run
@@ -70,7 +77,11 @@ if defined PROMPT (
     set OUTPUT=%ROOT%\logs\%PROFILE_NAME%-!TS!.log
   )
   setlocal DisableDelayedExpansion
-  gemini -p "%PROMPT%" --approval-mode yolo --allowed-mcp-server-names playwrightBrowser > "%OUTPUT%" 2>&1
+  if defined RESUME (
+    gemini --resume %RESUME% -p "%PROMPT%" --approval-mode yolo --allowed-mcp-server-names playwrightBrowser > "%OUTPUT%" 2>&1
+  ) else (
+    gemini -p "%PROMPT%" --approval-mode yolo --allowed-mcp-server-names playwrightBrowser > "%OUTPUT%" 2>&1
+  )
   endlocal
 ) else (
   set GEMINI_SYSTEM_MD=%PROFILE_SYSTEM_MD%

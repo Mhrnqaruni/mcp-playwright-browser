@@ -64,6 +64,7 @@ Available profiles:
 - `scripts/run-visual-headful.bat` (visual mode with screenshots)
 - `scripts/run-chrome-profile.bat` (real Chrome using a dedicated automation profile at `ChromeForMCP`)
 - `scripts/run-cdp-profile.bat` (auto-launch Chrome via CDP using `ChromeForMCP`)
+- `scripts/run-cdp-profile-screen.bat` (CDP + visual-first; screenshots by default)
 
 ### Interactive mode
 Run any `.bat` without arguments:

@@ -1,4 +1,4 @@
-# System Instructions (DOM Mode - One-shot)
+# System Instructions (CDP + Visual Mode - One-shot)
 
 Use MCP server `playwrightBrowser` for browser actions.
 
@@ -6,7 +6,7 @@ Use MCP server `playwrightBrowser` for browser actions.
 - FORBIDDEN: create any `.js`, `.cjs`, `.mjs`, `.ts` files or write automation scripts to disk.
 - FORBIDDEN: use shell commands to generate code files for automation.
 - FORBIDDEN: create or modify files under `scripts/` or `src/`.
-- REQUIRED: use MCP tools directly (`browser.launch`, `browser.goto`, etc.).
+- REQUIRED: use MCP tools directly (`browser.launch_chrome_cdp`, `browser.visual_snapshot`, etc.).
 - ALLOWED: use `files.write_text` only for outputs under `output/` or `logs/`.
 - ALLOWED: use `files.list_dir` to locate user-provided documents under `Applied Jobs/` (CV/cover letter/jobdescription).
 - ALLOWED: use `files.read_text` for text files under `Applied Jobs/` (CV.md/CV.txt/jobdescription.txt).
@@ -18,12 +18,23 @@ Use MCP server `playwrightBrowser` for browser actions.
   - Do NOT try to "research" the user by opening their LinkedIn profile or searching the web unless explicitly asked.
 
 ## Behavior
-- When a profile is needed, rely on MCP defaults. Do NOT pass `userDataDir` or `profileDirectory` manually.
-- Prefer DOM tools: `browser.snapshot`, `browser.list`, `browser.extract_text`, `browser.click`, `browser.fill`, `browser.type`.
-- After any click, navigation, dropdown, or page change, refresh element IDs with `browser.list` before using `elementId` again.
-- For long pages, use `browser.get_scroll_state` and scroll with `browser.scroll_by` until `atBottom` is true (or no new content after several scrolls).
-- If `browser.list` reports `needsScrollForMore: true` or `hasOffViewportCandidates: true`, keep scrolling and re-run `browser.list` before concluding the page is complete.
-- If the page does not scroll but content looks truncated, call `browser.get_scrollables` and use `browser.scroll_container`, then re-scan.
+- When starting a browser, ALWAYS use `browser.launch_chrome_cdp`. Do NOT use `browser.launch` in this profile.
+- Rely on MCP defaults for `userDataDir` and `profileDirectory`. Do NOT pass them manually.
+- Set capture profile to `light` (`browser.set_capture_profile`) unless user asks for high-detail debugging.
+- Use DOM-first capture ladder:
+  1) `browser.snapshot` (`detail: "low"`)
+  2) `browser.list` (`detail: "low"`)
+  3) `browser.query_dom` (`detail: "low"`)
+  4) `browser.take_snapshot` (`detail: "low"`) when `uid` targeting is needed
+  5) `browser.visual_snapshot` (`detail: "low"`) only when spatial interaction is required
+- If visual mode is used, prefer `elementId` from visual map or `browser.click_at`.
+- Do not re-run `visual_snapshot`/`take_snapshot` unless `domVersion` changed, you intentionally scrolled and need a fresh scan, stale ref occurred, target fails after `browser.wait_for`, or user asked for re-check.
+- Use `detail: "high"` only when low detail is insufficient.
+- For long pages:
+  - Use `browser.get_scroll_state` and scroll with `browser.scroll_by`.
+  - If `browser.list` reports `needsScrollForMore: true` or `hasOffViewportCandidates: true`, continue scrolling and re-run `browser.list` before concluding the page is complete.
+  - Use `browser.visual_snapshot` only if DOM tools still cannot identify the next action.
+  - If the page does not scroll but content looks truncated, call `browser.get_scrollables` and use `browser.scroll_container`, then re-snapshot.
 - Popup/new-tab tools do not auto-select by default. After popup/new-tab events, run `browser.list_pages` and `browser.select_page` explicitly.
 - For Google Forms:
   - Prefer `forms.google_*` tools (they click the actual options and verify `aria-checked`).

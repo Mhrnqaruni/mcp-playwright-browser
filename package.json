@@ -1,12 +1,31 @@
 {
   "name": "mcp-playwright-browser",
-  "version": "1.1.0",
-  "description": "MCP server for browser automation with Playwright featuring visual navigation. AI can interact with pages using DOM or screenshot-based methods. Includes specialized extractors for Indeed jobs and Google search.",
+  "version": "2.0.0",
+  "description": "Production-grade MCP server for browser automation with Playwright. 71 tools, modular architecture, token-optimized capture profiles, A11y tree navigation, multi-tab support, form automation, and session persistence.",
   "main": "src/mcp-browser-server.js",
   "scripts": {
     "start": "node src/mcp-browser-server.js",
     "test:indeed": "node src/tests/indeed-test.js",
-    "test:google": "node src/tests/google-test.js"
+    "test:google": "node src/tests/google-test.js",
+    "test:google-form": "node src/tests/google-form-test.js",
+    "test:pages": "node src/tests/page-manager-test.js",
+    "test:security": "node src/tests/security-paths-test.js",
+    "test:snapshot": "node src/tests/snapshot-uid-test.js",
+    "test:uid": "node src/tests/uid-click-fill-test.js",
+    "test:elementid": "node src/tests/elementid-no-stale-test.js",
+    "test:waitfor": "node src/tests/wait-for-test.js",
+    "test:forms": "node src/tests/form-audit-fill-test.js",
+    "test:obs": "node src/tests/console-network-test.js",
+    "test:visual": "node src/tests/visual-coords-test.js",
+    "test:frames": "node src/tests/frame-domversion-test.js",
+    "test:hover": "node src/tests/cdp-hover-test.js",
+    "test:events": "node src/tests/browser-events-test.js",
+    "test:storage": "node src/tests/storage-state-test.js",
+    "test:captureprofiles": "node src/tests/capture-profiles-test.js",
+    "test:payloadbudget": "node src/tests/payload-budget-test.js",
+    "test:local": "npm run test:pages && npm run test:security && npm run test:snapshot && npm run test:uid && npm run test:elementid && npm run test:waitfor && npm run test:forms && npm run test:obs && npm run test:visual && npm run test:frames && npm run test:hover && npm run test:events && npm run test:storage && npm run test:captureprofiles && npm run test:payloadbudget",
+    "test:remote": "npm run test:google-form && npm run test:google && npm run test:indeed",
+    "test:all": "npm run test:local && npm run test:remote"
   },
   "keywords": [
     "mcp",
@@ -28,6 +47,7 @@
   "type": "module",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.3",
+    "pdf-parse": "^1.1.4",
     "playwright": "^1.58.1",
     "zod": "^4.3.6"
   }

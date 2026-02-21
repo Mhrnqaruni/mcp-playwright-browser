@@ -5,6 +5,7 @@
       "args": [
         "src/mcp-browser-server.js"
       ],
+      "trust": true,
       "cwd": "C:/Users/User/Desktop/Applying for Job/Auto"
     }
   }

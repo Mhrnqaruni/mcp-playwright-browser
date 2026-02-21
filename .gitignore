@@ -34,6 +34,9 @@ scripts/.gemini/state.json
 playwright-report/
 test-results/
 
+# Generated prompt previews
+profiles/**/*.pdf
+
 # Debug files
 *-debug.*
 

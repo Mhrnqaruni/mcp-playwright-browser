@@ -4,8 +4,8 @@ setlocal enabledelayedexpansion
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
 pushd "%ROOT%"
 
-set PROFILE_NAME=cdp-profile
-set MCP_MODE=dom
+set PROFILE_NAME=cdp-profile-screen-persist
+set MCP_MODE=visual
 set MCP_HEADLESS=false
 set MCP_STEALTH=true
 set MCP_CDP_PORT=9222
@@ -27,18 +27,16 @@ set GEMINI_CLI_MCP_CAPTURE_PROFILE=%MCP_CAPTURE_PROFILE%
 set GEMINI_CLI_MCP_MAX_RESPONSE_BYTES=%MCP_MAX_RESPONSE_BYTES%
 set GEMINI_CLI_MCP_ARGS=%MCP_ARGS%
 
-set PROFILE_SYSTEM_MD=%ROOT%\profiles\cdp\system.md
-set PROFILE_SYSTEM_MD_ONESHOT=%ROOT%\profiles\cdp\oneshot.md
+set PROFILE_SYSTEM_MD=%ROOT%\profiles\cdp-visual\persistent.md
+set PROFILE_SYSTEM_MD_ONESHOT=%ROOT%\profiles\cdp-visual\persistent.md
 
 if not exist "%ROOT%\logs" mkdir "%ROOT%\logs"
 if not exist "%MCP_USER_DATA_DIR%" mkdir "%MCP_USER_DATA_DIR%"
 
-REM Close any Chrome processes using the dedicated CDP user data dir
-powershell -NoProfile -Command "$dir = $env:LOCALAPPDATA + '\\ChromeForMCP'; Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -and $_.CommandLine -match [regex]::Escape($dir) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >NUL 2>&1
-
 set PROMPT=
 set OUTPUT=
 set RESUME=
+set KILL_CHROME=
 
 call :parse_args %*
 goto run
@@ -71,6 +69,16 @@ if /I "%~1"=="--resume" (
   shift
   goto parse_loop
 )
+if /I "%~1"=="--kill-chrome" (
+  set "KILL_CHROME=1"
+  shift
+  goto parse_loop
+)
+if /I "%~1"=="--fresh" (
+  set "KILL_CHROME=1"
+  shift
+  goto parse_loop
+)
 if /I "%~1"=="--" (
   shift
   set "PROMPT=%*"
@@ -84,10 +92,15 @@ if defined PROMPT (
 shift
 goto parse_loop
 :parse_done
-endlocal & set "PROMPT=%PROMPT%" & set "OUTPUT=%OUTPUT%" & set "RESUME=%RESUME%"
+endlocal & set "PROMPT=%PROMPT%" & set "OUTPUT=%OUTPUT%" & set "RESUME=%RESUME%" & set "KILL_CHROME=%KILL_CHROME%"
 exit /b
 
 :run
+if defined KILL_CHROME (
+  REM Close any Chrome processes using the dedicated CDP user data dir
+  powershell -NoProfile -Command "$dir = $env:LOCALAPPDATA + '\\ChromeForMCP'; Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -and $_.CommandLine -match [regex]::Escape($dir) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >NUL 2>&1
+)
+
 if defined PROMPT (
   set GEMINI_SYSTEM_MD=%PROFILE_SYSTEM_MD_ONESHOT%
   if not defined OUTPUT (

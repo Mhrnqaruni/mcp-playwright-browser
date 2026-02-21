@@ -9,16 +9,22 @@ set MCP_MODE=visual
 set MCP_HEADLESS=false
 set MCP_STEALTH=true
 set MCP_CDP_PORT=9222
+set MCP_CDP_WAIT_MS=20000
 set MCP_FORCE_CDP=true
 set MCP_USER_DATA_DIR=%LOCALAPPDATA%\ChromeForMCP
 set MCP_PROFILE=Default
+set MCP_CAPTURE_PROFILE=light
+set MCP_MAX_RESPONSE_BYTES=280000
 set MCP_ARGS=--disable-blink-features=AutomationControlled;--disable-session-crashed-bubble
 set GEMINI_CLI_MCP_HEADLESS=%MCP_HEADLESS%
 set GEMINI_CLI_MCP_STEALTH=%MCP_STEALTH%
 set GEMINI_CLI_MCP_CDP_PORT=%MCP_CDP_PORT%
+set GEMINI_CLI_MCP_CDP_WAIT_MS=%MCP_CDP_WAIT_MS%
 set GEMINI_CLI_MCP_FORCE_CDP=%MCP_FORCE_CDP%
 set GEMINI_CLI_MCP_USER_DATA_DIR=%MCP_USER_DATA_DIR%
 set GEMINI_CLI_MCP_PROFILE=%MCP_PROFILE%
+set GEMINI_CLI_MCP_CAPTURE_PROFILE=%MCP_CAPTURE_PROFILE%
+set GEMINI_CLI_MCP_MAX_RESPONSE_BYTES=%MCP_MAX_RESPONSE_BYTES%
 set GEMINI_CLI_MCP_ARGS=%MCP_ARGS%
 
 set PROFILE_SYSTEM_MD=%ROOT%\profiles\cdp-visual\system.md
@@ -32,6 +38,7 @@ powershell -NoProfile -Command "$dir = $env:LOCALAPPDATA + '\\ChromeForMCP'; Get
 
 set PROMPT=
 set OUTPUT=
+set RESUME=
 
 call :parse_args %*
 goto run
@@ -58,6 +65,12 @@ if /I "%~1"=="--output" (
   shift
   goto parse_loop
 )
+if /I "%~1"=="--resume" (
+  set "RESUME=%~2"
+  shift
+  shift
+  goto parse_loop
+)
 if /I "%~1"=="--" (
   shift
   set "PROMPT=%*"
@@ -71,7 +84,7 @@ if defined PROMPT (
 shift
 goto parse_loop
 :parse_done
-endlocal & set "PROMPT=%PROMPT%" & set "OUTPUT=%OUTPUT%"
+endlocal & set "PROMPT=%PROMPT%" & set "OUTPUT=%OUTPUT%" & set "RESUME=%RESUME%"
 exit /b
 
 :run
@@ -82,7 +95,11 @@ if defined PROMPT (
     set OUTPUT=%ROOT%\logs\%PROFILE_NAME%-!TS!.log
   )
   setlocal DisableDelayedExpansion
-  gemini -p "%PROMPT%" --approval-mode yolo --allowed-mcp-server-names playwrightBrowser > "%OUTPUT%" 2>&1
+  if defined RESUME (
+    gemini --resume %RESUME% -p "%PROMPT%" --approval-mode yolo --allowed-mcp-server-names playwrightBrowser > "%OUTPUT%" 2>&1
+  ) else (
+    gemini -p "%PROMPT%" --approval-mode yolo --allowed-mcp-server-names playwrightBrowser > "%OUTPUT%" 2>&1
+  )
   endlocal
 ) else (
   set GEMINI_SYSTEM_MD=%PROFILE_SYSTEM_MD%
